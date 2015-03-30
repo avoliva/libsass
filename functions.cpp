@@ -30,6 +30,7 @@
 #define ARG(argname, argtype) get_arg<argtype>(argname, env, sig, pstate, backtrace)
 #define ARGR(argname, argtype, lo, hi) get_arg_r(argname, env, sig, pstate, lo, hi, backtrace)
 #define ARGM(argname, argtype, ctx) get_arg_m(argname, env, sig, pstate, backtrace, ctx)
+#define ARGL(argname, ctx) get_arg_l<List>(argname, env, sig, pstate, backtrace, ctx)
 
 namespace Sass {
   using std::stringstream;
@@ -118,6 +119,16 @@ namespace Sass {
       return val;
     }
 
+    template <typename T>
+    T* get_arg_l(const string& argname, Env& env, Signature sig, ParserState pstate, Backtrace* backtrace, Context& ctx)
+    {
+      List* val = get_arg<List>(argname, env, sig, pstate, backtrace);
+      if (!val) {
+        val = new (ctx.mem) List(pstate, 1);
+        *val << get_arg<Expression>(argname, env, sig, pstate, backtrace);
+      }
+      return val;
+    }
 #ifdef __MINGW32__
     uint64_t GetSeed()
     {
@@ -136,8 +147,8 @@ namespace Sass {
     static random_device rd;
     uint64_t GetSeed()
     {
-	  return rd();
-	}
+    return rd();
+  }
 #endif
 
     // note: the performance of many  implementations of
@@ -263,6 +274,13 @@ namespace Sass {
       return hsl_struct;
     }
 
+    HSL get_hsl(Color* rgb_color) 
+    {
+      return rgb_to_hsl( rgb_color->r(),
+                         rgb_color->g(),
+                         rgb_color->b());
+    }
+
     // hue to RGB helper function
     double h_to_rgb(double m1, double m2, double h) {
       if (h < 0) h += 1;
@@ -318,9 +336,8 @@ namespace Sass {
     BUILT_IN(hue)
     {
       Color* rgb_color = ARG("$color", Color);
-      HSL hsl_color = rgb_to_hsl(rgb_color->r(),
-                                 rgb_color->g(),
-                                 rgb_color->b());
+      HSL hsl_color = get_hsl(rgb_color);
+
       return new (ctx.mem) Number(pstate, hsl_color.h, "deg");
     }
 
@@ -328,9 +345,7 @@ namespace Sass {
     BUILT_IN(saturation)
     {
       Color* rgb_color = ARG("$color", Color);
-      HSL hsl_color = rgb_to_hsl(rgb_color->r(),
-                                 rgb_color->g(),
-                                 rgb_color->b());
+      HSL hsl_color = get_hsl(rgb_color);
       return new (ctx.mem) Number(pstate, hsl_color.s, "%");
     }
 
@@ -348,10 +363,8 @@ namespace Sass {
     BUILT_IN(adjust_hue)
     {
       Color* rgb_color = ARG("$color", Color);
+      HSL hsl_color = get_hsl(rgb_color);
       Number* degrees = ARG("$degrees", Number);
-      HSL hsl_color = rgb_to_hsl(rgb_color->r(),
-                                 rgb_color->g(),
-                                 rgb_color->b());
       return hsla_impl(hsl_color.h + degrees->value(),
                        hsl_color.s,
                        hsl_color.l,
@@ -364,10 +377,9 @@ namespace Sass {
     BUILT_IN(lighten)
     {
       Color* rgb_color = ARG("$color", Color);
+      HSL hsl_color = get_hsl(rgb_color);
+
       Number* amount = ARGR("$amount", Number, 0, 100);
-      HSL hsl_color = rgb_to_hsl(rgb_color->r(),
-                                 rgb_color->g(),
-                                 rgb_color->b());
       //Check lightness is not negative before lighten it
       double hslcolorL = hsl_color.l;
       if (hslcolorL < 0) {
@@ -386,10 +398,9 @@ namespace Sass {
     BUILT_IN(darken)
     {
       Color* rgb_color = ARG("$color", Color);
+      HSL hsl_color = get_hsl(rgb_color);
+
       Number* amount = ARGR("$amount", Number, 0, 100);
-      HSL hsl_color = rgb_to_hsl(rgb_color->r(),
-                                 rgb_color->g(),
-                                 rgb_color->b());
 
       //Check lightness if not over 100, before darken it
       double hslcolorL = hsl_color.l;
@@ -417,10 +428,7 @@ namespace Sass {
 
       ARGR("$amount", Number, 0, 100);
       Color* rgb_color = ARG("$color", Color);
-      HSL hsl_color = rgb_to_hsl(rgb_color->r(),
-                                 rgb_color->g(),
-                                 rgb_color->b());
-
+      HSL hsl_color = get_hsl(rgb_color);
       double hslcolorS = hsl_color.s + amount->value();
 
       // Saturation cannot be below 0 or above 100
@@ -443,11 +451,8 @@ namespace Sass {
     BUILT_IN(desaturate)
     {
       Color* rgb_color = ARG("$color", Color);
+      HSL hsl_color = get_hsl(rgb_color);
       Number* amount = ARGR("$amount", Number, 0, 100);
-      HSL hsl_color = rgb_to_hsl(rgb_color->r(),
-                                 rgb_color->g(),
-                                 rgb_color->b());
-
       double hslcolorS = hsl_color.s - amount->value();
 
       // Saturation cannot be below 0 or above 100
@@ -477,9 +482,7 @@ namespace Sass {
       }
 
       Color* rgb_color = ARG("$color", Color);
-      HSL hsl_color = rgb_to_hsl(rgb_color->r(),
-                                 rgb_color->g(),
-                                 rgb_color->b());
+      HSL hsl_color = get_hsl(rgb_color);
       return hsla_impl(hsl_color.h,
                        0.0,
                        hsl_color.l,
@@ -492,9 +495,7 @@ namespace Sass {
     BUILT_IN(complement)
     {
       Color* rgb_color = ARG("$color", Color);
-      HSL hsl_color = rgb_to_hsl(rgb_color->r(),
-                                 rgb_color->g(),
-                                 rgb_color->b());
+      HSL hsl_color = get_hsl(rgb_color);
       return hsla_impl(hsl_color.h - 180.0,
                        hsl_color.s,
                        hsl_color.l,
@@ -910,8 +911,8 @@ namespace Sass {
         string str = unquote(s->value());
 
         // normalize into 0-based indices
-        size_t start = UTF_8::offset_at_position(str, UTF_8::normalize_index(static_cast<int>(n->value()), UTF_8::code_point_count(str)));
-        size_t end = UTF_8::offset_at_position(str, UTF_8::normalize_index(static_cast<int>(m->value()), UTF_8::code_point_count(str)));
+        size_t start = UTF_8::offset_at_position(str, UTF_8::normalize_index(n->value(), UTF_8::code_point_count(str)));
+        size_t end = UTF_8::offset_at_position(str, UTF_8::normalize_index(m->value(), UTF_8::code_point_count(str)));
 
         // `str-slice` should always return an empty string when $end-at == 0
         // `normalize_index` normalizes 1 -> 0 so we need to check the original value
@@ -995,44 +996,48 @@ namespace Sass {
       return new (ctx.mem) Number(pstate, n->value() * 100, "%");
     }
 
-    Signature round_sig = "round($number)";
+    enum s_type { ROUND, CEIL, FLOOR, ABS };
+
+    Number* number_helper(Number* x, Context& ctx, ParserState pstate, s_type s)
+    {
+      Number* n = x;
+      Number* r = new (ctx.mem) Number(*n);
+      r->pstate(pstate);
+      switch (s) {
+        case ROUND: r->value(std::floor(r->value() + 0.5)); break;
+        case CEIL:  r->value(std::ceil(r->value())); break;
+        case FLOOR: r->value(std::floor(r->value())); break;
+        case ABS:   r->value(std::abs(r->value())); break;
+      }
+      return r;
+    }
+
+    Signature round_sig = "round($value)";
     BUILT_IN(round)
     {
-      Number* n = ARG("$number", Number);
-      Number* r = new (ctx.mem) Number(*n);
-      r->pstate(pstate);
-      r->value(std::floor(r->value() + 0.5));
-      return r;
+      s_type s = ROUND;
+      return number_helper(ARG("$value", Number), ctx, pstate, s);
     }
 
-    Signature ceil_sig = "ceil($number)";
+    Signature ceil_sig = "ceil($value)";
     BUILT_IN(ceil)
     {
-      Number* n = ARG("$number", Number);
-      Number* r = new (ctx.mem) Number(*n);
-      r->pstate(pstate);
-      r->value(std::ceil(r->value()));
-      return r;
+      s_type s = CEIL;
+      return number_helper(ARG("$value", Number), ctx, pstate, s);
     }
 
-    Signature floor_sig = "floor($number)";
+    Signature floor_sig = "floor($value)";
     BUILT_IN(floor)
     {
-      Number* n = ARG("$number", Number);
-      Number* r = new (ctx.mem) Number(*n);
-      r->pstate(pstate);
-      r->value(std::floor(r->value()));
-      return r;
+      s_type s = FLOOR;
+      return number_helper(ARG("$value", Number), ctx, pstate, s);
     }
 
-    Signature abs_sig = "abs($number)";
+    Signature abs_sig = "abs($value)";
     BUILT_IN(abs)
     {
-      Number* n = ARG("$number", Number);
-      Number* r = new (ctx.mem) Number(*n);
-      r->pstate(pstate);
-      r->value(std::abs(r->value()));
-      return r;
+      s_type s = ABS;
+      return number_helper(ARG("$value", Number), ctx, pstate, s);
     }
 
     Signature min_sig = "min($numbers...)";
@@ -1094,18 +1099,18 @@ namespace Sass {
         Map* map = dynamic_cast<Map*>(env["$list"]);
         return new (ctx.mem) Number(pstate,
                                     map ? map->length() : 1);
-      }
-
-      List* list = dynamic_cast<List*>(env["$list"]);
+      };
+      List* list = ARGL("$list", ctx);
       return new (ctx.mem) Number(pstate,
                                   list ? list->length() : 1);
     }
+
 
     Signature nth_sig = "nth($list, $n)";
     BUILT_IN(nth)
     {
       Map* m = dynamic_cast<Map*>(env["$list"]);
-      List* l = dynamic_cast<List*>(env["$list"]);
+      List* l = ARGL("$list", ctx);
       Number* n = ARG("$n", Number);
       if (n->value() == 0) error("argument `$n` of `" + string(sig) + "` must be non-zero", pstate);
       // if the argument isn't a list, then wrap it in a singleton list
@@ -1133,7 +1138,7 @@ namespace Sass {
     Signature set_nth_sig = "set-nth($list, $n, $value)";
     BUILT_IN(set_nth)
     {
-      List* l = dynamic_cast<List*>(env["$list"]);
+      List* l = ARGL("$list", ctx);
       Number* n = ARG("$n", Number);
       Expression* v = ARG("$value", Expression);
       if (!l) {
@@ -1153,7 +1158,7 @@ namespace Sass {
     Signature index_sig = "index($list, $value)";
     BUILT_IN(index)
     {
-      List* l = dynamic_cast<List*>(env["$list"]);
+      List* l = ARGL("$list", ctx);
       Expression* v = ARG("$value", Expression);
       if (!l) {
         l = new (ctx.mem) List(pstate, 1);
@@ -1168,8 +1173,8 @@ namespace Sass {
     Signature join_sig = "join($list1, $list2, $separator: auto)";
     BUILT_IN(join)
     {
-      List* l1 = dynamic_cast<List*>(env["$list1"]);
-      List* l2 = dynamic_cast<List*>(env["$list2"]);
+      List* l1 = ARGL("$list1", ctx);
+      List* l2 = ARGL("$list2", ctx);
       String_Constant* sep = ARG("$separator", String_Constant);
       List::Separator sep_val = (l1 ? l1->separator() : List::SPACE);
       if (!l1) {
@@ -1195,7 +1200,7 @@ namespace Sass {
     Signature append_sig = "append($list, $val, $separator: auto)";
     BUILT_IN(append)
     {
-      List* l = dynamic_cast<List*>(env["$list"]);
+      List* l = ARGL("$list", ctx);
       Expression* v = ARG("$val", Expression);
       String_Constant* sep = ARG("$separator", String_Constant);
       if (!l) {
@@ -1252,7 +1257,7 @@ namespace Sass {
     Signature list_separator_sig = "list_separator($list)";
     BUILT_IN(list_separator)
     {
-      List* l = dynamic_cast<List*>(env["$list"]);
+      List* l = ARGL("$list", ctx);
       if (!l) {
         l = new (ctx.mem) List(pstate, 1);
         *l << ARG("$list", Expression);
